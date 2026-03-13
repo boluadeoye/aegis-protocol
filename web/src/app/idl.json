@@ -1,0 +1,39 @@
+{
+  "address": "DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M",
+  "metadata": {
+    "name": "aegis",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "initialize_service",
+      "discriminator": [164, 144, 128, 128, 128, 128, 128, 128],
+      "accounts": [
+        { "name": "service_root", "writable": true, "pda": { "seeds": [{ "kind": "const", "value": [115, 101, 114, 118, 105, 99, 101, 95, 114, 111, 111, 116] }, { "kind": "account", "path": "authority" }, { "kind": "arg", "path": "service_id" }] } },
+        { "name": "authority", "writable": true, "signer": true },
+        { "name": "system_program", "address": "11111111111111111111111111111111" }
+      ],
+      "args": [{ "name": "service_id", "type": { "array": ["u8", 32] } }]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ServiceRoot",
+      "discriminator": [1, 2, 3, 4, 5, 6, 7, 8],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "pubkey" },
+          { "name": "service_id", "type": { "array": ["u8", 32] } },
+          { "name": "circuit_breaker", "type": "bool" },
+          { "name": "role_count", "type": "u64" },
+          { "name": "access_key_count", "type": "u64" },
+          { "name": "created_at", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ]
+}
