@@ -1,16 +1,12 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Aegis11111111111111111111111111111111111111");
+declare_id!("DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M");
 
 #[program]
 pub mod aegis {
     use super::*;
 
-    /// Level 0: Initialize the Service Root.
-    pub fn initialize_service(
-        ctx: Context<InitializeService>, 
-        service_id: [u8; 32]
-    ) -> Result<()> {
+    pub fn initialize_service(ctx: Context<InitializeService>, service_id: [u8; 32]) -> Result<()> {
         let service_root = &mut ctx.accounts.service_root;
         service_root.authority = ctx.accounts.authority.key();
         service_root.service_id = service_id;
@@ -19,18 +15,10 @@ pub mod aegis {
         service_root.access_key_count = 0;
         service_root.created_at = Clock::get()?.unix_timestamp;
         service_root.bump = ctx.bumps.service_root;
-        
-        msg!("Aegis Service Initialized: {:?}", service_id);
         Ok(())
     }
 
-    /// Level 1: Create a Role Definition.
-    pub fn create_role(
-        ctx: Context<CreateRole>, 
-        role_id: [u8; 16], 
-        role_name: String, 
-        permissions: u64
-    ) -> Result<()> {
+    pub fn create_role(ctx: Context<CreateRole>, role_id: [u8; 16], role_name: String, permissions: u64) -> Result<()> {
         let role_def = &mut ctx.accounts.role_definition;
         role_def.service_root = ctx.accounts.service_root.key();
         role_def.role_id = role_id;
@@ -38,20 +26,12 @@ pub mod aegis {
         role_def.permissions = permissions;
         role_def.is_active = true;
         role_def.bump = ctx.bumps.role_definition;
-
         ctx.accounts.service_root.role_count += 1;
         Ok(())
     }
 
-    /// Level 2: Issue a User Access Key.
-    pub fn issue_access_key(
-        ctx: Context<IssueAccessKey>, 
-        permissions: u64, 
-        ttl: i64
-    ) -> Result<()> {
+    pub fn issue_access_key(ctx: Context<IssueAccessKey>, permissions: u64, ttl: i64) -> Result<()> {
         let role_def = &ctx.accounts.role_definition;
-        
-        // SECURITY: Bitmask Overflow Protection
         let granted = role_def.permissions & permissions;
         require!(granted == permissions, AegisError::PermissionExceedsRole);
 
@@ -65,43 +45,36 @@ pub mod aegis {
         access_key.is_revoked = false;
         access_key.use_count = 0;
         access_key.bump = ctx.bumps.access_key;
-
         ctx.accounts.service_root.access_key_count += 1;
         Ok(())
     }
 
-    /// Level 3: Verify Access (The Logic Gate).
     pub fn verify_access(ctx: Context<VerifyAccess>, required_permission: u64) -> Result<()> {
         let service_root = &ctx.accounts.service_root;
         let access_key = &mut ctx.accounts.access_key;
-
-        // 1. GLOBAL CIRCUIT BREAKER (O(1) Revocation)
         require!(!service_root.circuit_breaker, AegisError::ServiceFrozen);
-
-        // 2. INDIVIDUAL REVOCATION
         require!(!access_key.is_revoked, AegisError::KeyRevoked);
-
-        // 3. TEMPORAL EXPIRY
         if access_key.expires_at > 0 {
-            require!(
-                Clock::get()?.unix_timestamp < access_key.expires_at,
-                AegisError::KeyExpired
-            );
+            require!(Clock::get()?.unix_timestamp < access_key.expires_at, AegisError::KeyExpired);
         }
-
-        // 4. BITMASK PERMISSION CHECK
-        require!(
-            (access_key.granted_permissions & required_permission) == required_permission,
-            AegisError::InsufficientPermissions
-        );
-
+        require!((access_key.granted_permissions & required_permission) == required_permission, AegisError::InsufficientPermissions);
         access_key.last_used = Clock::get()?.unix_timestamp;
         access_key.use_count += 1;
-
         Ok(())
     }
 
-    /// Administrative: Toggle Global Circuit Breaker.
+    pub fn log_action(ctx: Context<LogAction>, action_code: u8) -> Result<()> {
+        let audit_log = &mut ctx.accounts.audit_log;
+        // FLAG VII: Explicit Vector Overflow Guard
+        require!(audit_log.entries.len() < 50, AegisError::AuditLogFull);
+        
+        audit_log.entries.push(AuditEntry {
+            action_code,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
     pub fn toggle_circuit_breaker(ctx: Context<ToggleCircuitBreaker>, frozen: bool) -> Result<()> {
         ctx.accounts.service_root.circuit_breaker = frozen;
         Ok(())
@@ -111,13 +84,7 @@ pub mod aegis {
 #[derive(Accounts)]
 #[instruction(service_id: [u8; 32])]
 pub struct InitializeService<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 1,
-        seeds = [b"service_root", authority.key().as_ref(), service_id.as_ref()],
-        bump
-    )]
+    #[account(init, payer = authority, space = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 1, seeds = [b"service_root", authority.key().as_ref(), service_id.as_ref()], bump)]
     pub service_root: Account<'info, ServiceRoot>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -127,13 +94,7 @@ pub struct InitializeService<'info> {
 #[derive(Accounts)]
 #[instruction(role_id: [u8; 16])]
 pub struct CreateRole<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + 32 + 16 + 32 + 8 + 4 + 1 + 1,
-        seeds = [b"role_def", service_root.key().as_ref(), role_id.as_ref()],
-        bump
-    )]
+    #[account(init, payer = authority, space = 8 + 32 + 16 + 32 + 8 + 1 + 1, seeds = [b"role_def", service_root.key().as_ref(), role_id.as_ref()], bump)]
     pub role_definition: Account<'info, RoleDefinition>,
     #[account(mut, has_one = authority)]
     pub service_root: Account<'info, ServiceRoot>,
@@ -144,21 +105,12 @@ pub struct CreateRole<'info> {
 
 #[derive(Accounts)]
 pub struct IssueAccessKey<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1,
-        seeds = [b"access_key", role_definition.key().as_ref(), user.key().as_ref()],
-        bump
-    )]
+    #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1, seeds = [b"access_key", role_definition.key().as_ref(), user.key().as_ref()], bump)]
     pub access_key: Account<'info, UserAccessKey>,
     #[account(mut)]
     pub service_root: Account<'info, ServiceRoot>,
-    #[account(
-        constraint = role_definition.service_root == service_root.key() @ AegisError::RoleMismatch
-    )]
+    #[account(constraint = role_definition.service_root == service_root.key() @ AegisError::RoleMismatch)]
     pub role_definition: Account<'info, RoleDefinition>,
-    /// CHECK: The user receiving access
     pub user: AccountInfo<'info>,
     #[account(mut, constraint = authority.key() == service_root.authority)]
     pub authority: Signer<'info>,
@@ -168,12 +120,15 @@ pub struct IssueAccessKey<'info> {
 #[derive(Accounts)]
 pub struct VerifyAccess<'info> {
     pub service_root: Account<'info, ServiceRoot>,
-    #[account(
-        mut,
-        constraint = access_key.service_root == service_root.key() @ AegisError::KeyServiceMismatch,
-        constraint = access_key.user == user.key() @ AegisError::KeyUserMismatch
-    )]
+    #[account(mut, constraint = access_key.service_root == service_root.key() @ AegisError::KeyServiceMismatch, constraint = access_key.user == user.key() @ AegisError::KeyUserMismatch)]
     pub access_key: Account<'info, UserAccessKey>,
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct LogAction<'info> {
+    #[account(mut, constraint = audit_log.authority == user.key())]
+    pub audit_log: Account<'info, AuditLog>,
     pub user: Signer<'info>,
 }
 
@@ -219,6 +174,18 @@ pub struct UserAccessKey {
     pub bump: u8,
 }
 
+#[account]
+pub struct AuditLog {
+    pub authority: Pubkey,
+    pub entries: Vec<AuditEntry>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+pub struct AuditEntry {
+    pub action_code: u8,
+    pub timestamp: i64,
+}
+
 #[error_code]
 pub enum AegisError {
     #[msg("Service is currently frozen by global circuit breaker.")]
@@ -239,4 +206,6 @@ pub enum AegisError {
     PermissionExceedsRole,
     #[msg("Unauthorized authority.")]
     Unauthorized,
+    #[msg("The audit log is full.")]
+    AuditLogFull,
 }
