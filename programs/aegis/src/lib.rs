@@ -7,7 +7,6 @@ pub mod aegis {
     use super::*;
 
     /// Level 0: Initialize the Service Root.
-    /// This is the anchor for the entire service provider's identity.
     pub fn initialize_service(
         ctx: Context<InitializeService>, 
         service_id: [u8; 32]
@@ -15,7 +14,7 @@ pub mod aegis {
         let service_root = &mut ctx.accounts.service_root;
         service_root.authority = ctx.accounts.authority.key();
         service_root.service_id = service_id;
-        service_root.circuit_breaker = false; // System starts active
+        service_root.circuit_breaker = false;
         service_root.role_count = 0;
         service_root.access_key_count = 0;
         service_root.created_at = Clock::get()?.unix_timestamp;
@@ -26,7 +25,6 @@ pub mod aegis {
     }
 
     /// Level 1: Create a Role Definition.
-    /// Defines a template of permissions (bitmask) under a Service Root.
     pub fn create_role(
         ctx: Context<CreateRole>, 
         role_id: [u8; 16], 
@@ -42,13 +40,10 @@ pub mod aegis {
         role_def.bump = ctx.bumps.role_definition;
 
         ctx.accounts.service_root.role_count += 1;
-        
-        msg!("Role Created: {}", role_def.role_name);
         Ok(())
     }
 
     /// Level 2: Issue a User Access Key.
-    /// Grants a specific user a subset of permissions from a Role.
     pub fn issue_access_key(
         ctx: Context<IssueAccessKey>, 
         permissions: u64, 
@@ -56,7 +51,7 @@ pub mod aegis {
     ) -> Result<()> {
         let role_def = &ctx.accounts.role_definition;
         
-        // SECURITY: Ensure granted permissions do not exceed role definition
+        // SECURITY: Bitmask Overflow Protection
         let granted = role_def.permissions & permissions;
         require!(granted == permissions, AegisError::PermissionExceedsRole);
 
@@ -72,24 +67,21 @@ pub mod aegis {
         access_key.bump = ctx.bumps.access_key;
 
         ctx.accounts.service_root.access_key_count += 1;
-
-        msg!("Access Key Issued for User: {}", access_key.user);
         Ok(())
     }
 
-    /// Level 3: Verify Access.
-    /// The core authorization gate. Checks circuit breaker, expiry, and bitmask.
+    /// Level 3: Verify Access (The Logic Gate).
     pub fn verify_access(ctx: Context<VerifyAccess>, required_permission: u64) -> Result<()> {
         let service_root = &ctx.accounts.service_root;
         let access_key = &mut ctx.accounts.access_key;
 
-        // 1. GLOBAL CIRCUIT BREAKER CHECK (O(1) Revocation)
+        // 1. GLOBAL CIRCUIT BREAKER (O(1) Revocation)
         require!(!service_root.circuit_breaker, AegisError::ServiceFrozen);
 
-        // 2. INDIVIDUAL REVOCATION CHECK
+        // 2. INDIVIDUAL REVOCATION
         require!(!access_key.is_revoked, AegisError::KeyRevoked);
 
-        // 3. TEMPORAL EXPIRY CHECK
+        // 3. TEMPORAL EXPIRY
         if access_key.expires_at > 0 {
             require!(
                 Clock::get()?.unix_timestamp < access_key.expires_at,
@@ -103,18 +95,15 @@ pub mod aegis {
             AegisError::InsufficientPermissions
         );
 
-        // Update usage metadata
         access_key.last_used = Clock::get()?.unix_timestamp;
         access_key.use_count += 1;
 
-        msg!("Access Verified. Permission Bit: {}", required_permission);
         Ok(())
     }
 
     /// Administrative: Toggle Global Circuit Breaker.
     pub fn toggle_circuit_breaker(ctx: Context<ToggleCircuitBreaker>, frozen: bool) -> Result<()> {
         ctx.accounts.service_root.circuit_breaker = frozen;
-        msg!("Global Circuit Breaker State: {}", frozen);
         Ok(())
     }
 }
@@ -158,7 +147,7 @@ pub struct IssueAccessKey<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 64 + 1,
+        space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1,
         seeds = [b"access_key", role_definition.key().as_ref(), user.key().as_ref()],
         bump
     )]
