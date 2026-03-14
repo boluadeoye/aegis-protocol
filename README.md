@@ -1,48 +1,55 @@
 # AEGIS PROTOCOL
-### Sovereign On-Chain Identity & Access Management for the Decentralized Web
+### Sovereign On-Chain Identity & Access Management (IAM) for Solana
+
+> **"A hierarchical IAM system for Solana with constant-time global revocation and CPU-level permission checks. Architected and deployed entirely on an Android device via Termux in Lagos, Nigeria."**
 
 ---
 
-> "This program was architected, written, compiled, and deployed
->  entirely on an Android mobile device running Termux.
->  No MacBook. No cloud IDE. No local Solana CLI.
->  Just a phone, a terminal emulator, and the conviction
->  that the best systems are built under constraint."
->
-> — Bolu Adeoye, Lagos, Nigeria
+## ⚡ 30-SECOND ARCHITECTURE SNAPSHOT
+
+Aegis reframes Solana as a distributed state-machine backend by mirroring the internal logic of **AWS IAM**.
+
+### 1. The Hierarchy (Relational PDAs)
+`ServiceRoot` (Global Authority)  
+      ↓  
+`RoleDefinition` (Permission Group)  
+      ↓  
+`UserAccessKey` (Individual Identity)
+
+### 2. The Moat (Technical Differentiators)
+*   **O(1) Revocation:** Trigger a "Circuit Breaker" on the `ServiceRoot` to freeze millions of keys in a single transaction.
+*   **Bitmask Permissions:** 64 discrete, composable permissions verified via a single bitwise AND instruction (CPU-level speed).
+*   **Relational Constraints:** Explicit Anchor constraints prevent **Account Substitution Attacks** by verifying the parent-child link of every PDA.
 
 ---
 
-## THE THESIS
-Web2 identity systems are permissions granted by corporations. Aegis is permissions owned by users. By rebuilding IAM as a Distributed State Machine on Solana, we eliminate the "Issuer as Censor" vulnerability inherent in JWT-based architectures.
+## 🛠️ LIVE INFRASTRUCTURE
+*   **Program ID:** `DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M`
+*   **Frontend HUD:** [https://egis-hudd.vercel.app](https://egis-hudd.vercel.app)
+*   **On-Chain Proof:** [View Live Program Activity on Solscan](https://solscan.io/account/DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M?cluster=devnet)
 
-## LIVE INFRASTRUCTURE
-- **Program ID:** `DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M`
-- **Frontend HUD:** [https://egis-hudd.vercel.app](https://egis-hudd.vercel.app)
-- **Network:** Solana Devnet
+---
 
-## ON-CHAIN VERIFICATION
-The protocol has passed a 5-strike adversarial audit on-chain, verifying hierarchical initialization, bitmask authorization, and O(1) global revocation.
+## 🧠 WEB2 VS. SOLANA: THE SOVEREIGNTY SHIFT
+| Feature | JWT (Web2) | Aegis PDA (Web3) |
+| :--- | :--- | :--- |
+| **Storage** | Private Database | Public On-Chain Account |
+| **Revocation** | Server Blocklist (O(n)) | Circuit Breaker (O(1)) |
+| **Censorship** | Issuer Controls Identity | User Owns, Service Authorizes |
+| **Audit Trail** | Mutable Logs | Immutable Ledger |
 
-**[View Live Program Activity on Solscan](https://solscan.io/account/DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M?cluster=devnet)**
+---
 
-## KEY DIFFERENTIATORS
-1. **Hierarchical PDAs:** Strict `ServiceRoot` -> `RoleDefinition` -> `UserAccessKey` derivation ensures on-chain discoverability and relationship integrity.
-2. **O(1) Global Revocation:** A "Circuit Breaker" on the ServiceRoot allows for instant, service-wide freezing of all access keys in a single transaction.
-3. **Bitmask Permissions:** `u64` bitwise operations enable 64 discrete, composable permissions checkable in a single CPU instruction.
+## 🛡️ SECURITY MANIFESTO
+Detailed adversarial mitigations are documented in `SECURITY.md`, covering:
+1. Account Substitution Defense
+2. Signer Validation Enforcement
+3. AuditLog Vector Overflow Guards
+4. Bitmask Overflow Protection
 
-## PERFORMANCE & LATENCY
-**Devnet instruction latency: 1100–1500ms.** 
-This reflects current Solana devnet network conditions and RPC endpoint variability, not program execution time. The on-chain instruction compute units are minimal—permission verification is a single bitwise AND operation.
-
-## SECURITY ARCHITECTURE
-Detailed in `SECURITY.md`. Key mitigations include:
-- **Account Substitution Defense:** Explicit cross-account relationship constraints.
-- **Signer Validation:** Framework-level signature enforcement via `Signer<'info>`.
-- **Overflow Protection:** Explicit upper-bound guards on `AuditLog` vectors.
-
-## BUILD ENVIRONMENT
-- **Device:** Android Smartphone
-- **Environment:** Termux (Linux terminal emulator)
-- **IDE:** Neovim via Termux
-- **Deployment:** Solana Playground / Devnet
+## 📱 THE BUILD ENVIRONMENT
+This protocol was built under extreme resource constraints.
+*   **Hardware:** Android Smartphone
+*   **Environment:** Termux (Linux CLI)
+*   **IDE:** Neovim
+*   **Compiler:** Solana Playground
