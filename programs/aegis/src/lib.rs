@@ -18,7 +18,7 @@ pub mod aegis {
         Ok(())
     }
 
-    pub fn create_role(ctx: Context<CreateRole>, role_id: [u8; 16], role_name: String, permissions: u64) -> Result<()> {
+    pub fn create_role(ctx: Context<CreateRole>, role_id:[u8; 16], role_name: String, permissions: u64) -> Result<()> {
         let role_def = &mut ctx.accounts.role_definition;
         role_def.service_root = ctx.accounts.service_root.key();
         role_def.role_id = role_id;
@@ -49,29 +49,64 @@ pub mod aegis {
         Ok(())
     }
 
-    pub fn verify_access(ctx: Context<VerifyAccess>, required_permission: u64) -> Result<()> {
-        let service_root = &ctx.accounts.service_root;
+    // NEW: Individual Revocation
+    pub fn revoke_access_key(ctx: Context<RevokeAccessKey>) -> Result<()> {
         let access_key = &mut ctx.accounts.access_key;
-        require!(!service_root.circuit_breaker, AegisError::ServiceFrozen);
-        require!(!access_key.is_revoked, AegisError::KeyRevoked);
-        if access_key.expires_at > 0 {
-            require!(Clock::get()?.unix_timestamp < access_key.expires_at, AegisError::KeyExpired);
-        }
-        require!((access_key.granted_permissions & required_permission) == required_permission, AegisError::InsufficientPermissions);
-        access_key.last_used = Clock::get()?.unix_timestamp;
-        access_key.use_count += 1;
+        access_key.is_revoked = true;
+        Ok(())
+    }
+
+    // NEW: Initialize the 4th Tier (Audit Log)
+    pub fn initialize_audit_log(ctx: Context<InitializeAuditLog>) -> Result<()> {
+        let audit_log = &mut ctx.accounts.audit_log;
+        audit_log.access_key = ctx.accounts.access_key.key();
+        audit_log.bump = ctx.bumps.audit_log;
         Ok(())
     }
 
     pub fn log_action(ctx: Context<LogAction>, action_code: u8) -> Result<()> {
         let audit_log = &mut ctx.accounts.audit_log;
-        // FLAG VII: Explicit Vector Overflow Guard
         require!(audit_log.entries.len() < 50, AegisError::AuditLogFull);
-        
+
         audit_log.entries.push(AuditEntry {
             action_code,
             timestamp: Clock::get()?.unix_timestamp,
         });
+        Ok(())
+    }
+
+    // NEW: Ephemeral Session Delegation
+    pub fn delegate_session(ctx: Context<DelegateSession>, permissions: u64, ttl: i64) -> Result<()> {
+        let access_key = &ctx.accounts.access_key;
+        require!(!access_key.is_revoked, AegisError::KeyRevoked);
+        
+        let granted = access_key.granted_permissions & permissions;
+        require!(granted == permissions, AegisError::PermissionExceedsRole);
+
+        let session = &mut ctx.accounts.session_delegate;
+        session.parent_key = access_key.key();
+        session.delegate = ctx.accounts.delegate.key();
+        session.permissions = permissions;
+        session.expires_at = Clock::get()?.unix_timestamp + ttl;
+        session.bump = ctx.bumps.session_delegate;
+        Ok(())
+    }
+
+    pub fn verify_access(ctx: Context<VerifyAccess>, required_permission: u64) -> Result<()> {
+        let service_root = &ctx.accounts.service_root;
+        let access_key = &mut ctx.accounts.access_key;
+        
+        require!(!service_root.circuit_breaker, AegisError::ServiceFrozen);
+        require!(!access_key.is_revoked, AegisError::KeyRevoked);
+        
+        if access_key.expires_at > 0 {
+            require!(Clock::get()?.unix_timestamp < access_key.expires_at, AegisError::KeyExpired);
+        }
+        
+        require!((access_key.granted_permissions & required_permission) == required_permission, AegisError::InsufficientPermissions);
+        
+        access_key.last_used = Clock::get()?.unix_timestamp;
+        access_key.use_count += 1;
         Ok(())
     }
 
@@ -84,7 +119,7 @@ pub mod aegis {
 #[derive(Accounts)]
 #[instruction(service_id: [u8; 32])]
 pub struct InitializeService<'info> {
-    #[account(init, payer = authority, space = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 1, seeds = [b"service_root", authority.key().as_ref(), service_id.as_ref()], bump)]
+    #[account(init, payer = authority, space = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 1, seeds =[b"service_root", authority.key().as_ref(), service_id.as_ref()], bump)]
     pub service_root: Account<'info, ServiceRoot>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -94,7 +129,7 @@ pub struct InitializeService<'info> {
 #[derive(Accounts)]
 #[instruction(role_id: [u8; 16])]
 pub struct CreateRole<'info> {
-    #[account(init, payer = authority, space = 8 + 32 + 16 + 32 + 8 + 1 + 1, seeds = [b"role_def", service_root.key().as_ref(), role_id.as_ref()], bump)]
+    #[account(init, payer = authority, space = 8 + 32 + 16 + 32 + 8 + 1 + 1, seeds =[b"role_def", service_root.key().as_ref(), role_id.as_ref()], bump)]
     pub role_definition: Account<'info, RoleDefinition>,
     #[account(mut, has_one = authority)]
     pub service_root: Account<'info, ServiceRoot>,
@@ -105,7 +140,7 @@ pub struct CreateRole<'info> {
 
 #[derive(Accounts)]
 pub struct IssueAccessKey<'info> {
-    #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1, seeds = [b"access_key", role_definition.key().as_ref(), user.key().as_ref()], bump)]
+    #[account(init, payer = authority, space = 8 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 1, seeds =[b"access_key", role_definition.key().as_ref(), user.key().as_ref()], bump)]
     pub access_key: Account<'info, UserAccessKey>,
     #[account(mut)]
     pub service_root: Account<'info, ServiceRoot>,
@@ -118,17 +153,49 @@ pub struct IssueAccessKey<'info> {
 }
 
 #[derive(Accounts)]
-pub struct VerifyAccess<'info> {
-    pub service_root: Account<'info, ServiceRoot>,
-    #[account(mut, constraint = access_key.service_root == service_root.key() @ AegisError::KeyServiceMismatch, constraint = access_key.user == user.key() @ AegisError::KeyUserMismatch)]
+pub struct RevokeAccessKey<'info> {
+    #[account(mut, has_one = service_root)]
     pub access_key: Account<'info, UserAccessKey>,
+    pub service_root: Account<'info, ServiceRoot>,
+    #[account(constraint = authority.key() == service_root.authority)]
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeAuditLog<'info> {
+    #[account(init, payer = user, space = 8 + 32 + 4 + (50 * 9) + 1, seeds =[b"audit_log", access_key.key().as_ref()], bump)]
+    pub audit_log: Account<'info, AuditLog>,
+    pub access_key: Account<'info, UserAccessKey>,
+    #[account(mut, constraint = user.key() == access_key.user)]
     pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct LogAction<'info> {
-    #[account(mut, constraint = audit_log.authority == user.key())]
+    #[account(mut, has_one = access_key)]
     pub audit_log: Account<'info, AuditLog>,
+    pub access_key: Account<'info, UserAccessKey>,
+    #[account(constraint = user.key() == access_key.user)]
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct DelegateSession<'info> {
+    #[account(init, payer = user, space = 8 + 32 + 32 + 8 + 8 + 1, seeds =[b"session", access_key.key().as_ref(), delegate.key().as_ref()], bump)]
+    pub session_delegate: Account<'info, SessionDelegate>,
+    pub access_key: Account<'info, UserAccessKey>,
+    pub delegate: AccountInfo<'info>,
+    #[account(mut, constraint = user.key() == access_key.user)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct VerifyAccess<'info> {
+    pub service_root: Account<'info, ServiceRoot>,
+    #[account(mut, constraint = access_key.service_root == service_root.key() @ AegisError::KeyServiceMismatch, constraint = access_key.user == user.key() @ AegisError::KeyUserMismatch)]
+    pub access_key: Account<'info, UserAccessKey>,
     pub user: Signer<'info>,
 }
 
@@ -176,8 +243,18 @@ pub struct UserAccessKey {
 
 #[account]
 pub struct AuditLog {
-    pub authority: Pubkey,
+    pub access_key: Pubkey,
     pub entries: Vec<AuditEntry>,
+    pub bump: u8,
+}
+
+#[account]
+pub struct SessionDelegate {
+    pub parent_key: Pubkey,
+    pub delegate: Pubkey,
+    pub permissions: u64,
+    pub expires_at: i64,
+    pub bump: u8,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
