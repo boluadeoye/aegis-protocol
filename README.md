@@ -24,9 +24,9 @@ Aegis reframes Solana as a distributed state-machine backend by mirroring the in
 ---
 
 ## 🛠️ LIVE INFRASTRUCTURE
-*   **Program ID:** `DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M`
+*   **Program ID:** `DDVwRiD22Hdbz3tEuGjUjBVUmLPWpDndF2NXqK8b5Z6M`
 *   **Frontend HUD:** [https://aegis-hudd.vercel.app/](https://aegis-hudd.vercel.app/)
-*   **On-Chain Proof:** [View Live Program Activity on Solscan](https://solscan.io/account/DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M?cluster=devnet)
+*   **On-Chain Proof:** [View Live Program Activity on Solscan](https://solscan.io/account/DDVwRiD22Hdbz3tEuGjUjBVUmLPWpDndF2NXqK8b5Z6N?cluster=devnet)
 
 ---
 
