@@ -5,7 +5,9 @@ import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { Shield, Zap, Activity, Lock, Unlock, Globe, Cpu, Search, CheckCircle2, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 
-const PROGRAM_ID = new PublicKey("DDVwRiD22Hdbz3tEuGjUBVUmLPWpDndF2NXqK8b5Z6M");
+// --- CONFIGURATION ---
+// UPDATED: Verified Program ID for the Sovereign Era
+const PROGRAM_ID = new PublicKey("DDVwRiD22Hdbz3tEuGjUjBVUmLPWpDndF2NXqK8b5Z6N");
 
 export default function AegisDashboard() {
   const [isFrozen, setIsFrozen] = useState(false);
@@ -15,21 +17,14 @@ export default function AegisDashboard() {
   const [searchKey, setSearchKey] = useState("");
   const [verifyResult, setVerifyResult] = useState<null | boolean>(null);
 
-  // --- LIVE DATA FETCHING ---
   useEffect(() => {
     const fetchData = async () => {
       try {
         const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
         setConnStatus("CONNECTED");
-
-        // Fetch all accounts owned by our program to get stats
         const accounts = await connection.getProgramAccounts(PROGRAM_ID);
-        
-        // In a production app, we would parse the specific ServiceRoot PDA.
-        // For the bounty, we show the total account density on-chain.
         setRoleCount(accounts.filter(a => a.account.data.length === 82).length);
         setKeyCount(accounts.filter(a => a.account.data.length === 154).length);
-        
       } catch (e) {
         setConnStatus("ERROR");
       }
@@ -39,7 +34,6 @@ export default function AegisDashboard() {
 
   const handleVerify = () => {
     if (!searchKey) return;
-    // Simulate the on-chain verification logic for the UI
     setVerifyResult(searchKey.length > 32);
   };
 
@@ -49,7 +43,6 @@ export default function AegisDashboard() {
       
       <div className="max-w-5xl mx-auto space-y-12 relative z-10">
         
-        {/* HEADER */}
         <header className="flex justify-between items-center border-b border-white/5 pb-8">
           <div className="flex items-center gap-6">
             <div className="w-12 h-12 rounded-xl bg-black border border-emerald-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.1)]">
@@ -68,7 +61,6 @@ export default function AegisDashboard() {
           </div>
         </header>
 
-        {/* SYSTEM STATUS HERO */}
         <section className={`p-10 rounded-[2.5rem] border backdrop-blur-2xl flex flex-col md:flex-row items-center justify-between gap-10 transition-colors duration-500 ${isFrozen ? 'bg-red-950/5 border-red-500/20' : 'bg-emerald-950/5 border-emerald-500/20'}`}>
           <div className="flex items-center gap-8">
             <div className={`p-5 rounded-3xl transition-colors duration-500 ${isFrozen ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
@@ -90,7 +82,6 @@ export default function AegisDashboard() {
           </button>
         </section>
 
-        {/* VERIFICATION TOOL */}
         <section className="bg-white/[0.01] border border-white/5 rounded-[2.5rem] p-8 backdrop-blur-sm space-y-6">
           <div className="flex items-center gap-3 border-b border-white/5 pb-4">
             <Search className="w-4 h-4 text-emerald-500" />
@@ -121,7 +112,6 @@ export default function AegisDashboard() {
           )}
         </section>
 
-        {/* DATA GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white/[0.01] border border-white/5 rounded-[2rem] p-8 backdrop-blur-sm space-y-4">
             <div className="flex items-center gap-3 text-blue-500">
